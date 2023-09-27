@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Store Pallet Assignment</title>
+    <style>
+        /* Add some basic styling for clarity */
+        div {
+            margin-bottom: 10px;
+        }
+
+        #storeForm,
+        #laneControls,
+        #results {
+            width: 30%;
+            float: left;
+            padding: 10px;
+        }
+
+        .lane,
+        .store {
+            display: flex;
+            align-items: center;
+            width: 50%;
+            box-sizing: border-box;
+            float: left;
+        }
+
+        .lane input[type="checkbox"],
+        .store input[type="number"] {
+            margin-right: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <h2>Enter Pallets for Stores</h2>
+    <form id="storeForm">
+        <div id="storeInputs"></div>
+        <button type="button" onclick="processData()">Assign Pallets</button>
+    </form>
+
+    <div id="laneControls">
+        <h2>Lane Controls</h2>
+        <div>
+            <input type="checkbox" id="laneControl1" checked onchange="toggleLaneGroup(62, 72, this.checked)">
+            Enable Lanes 62-72
+        </div>
+        <button type="button" onclick="exportToXLS()">Export to XLS</button>
+    </div>
+
+    <h2>Results</h2>
+    <div id="results"></div>
+
+    <script>
+        const storeOrder = [30, 20, 2, 6, 27, 51, 24, 73, 1, 37, 5, 22, 23, 35, 39, 7, 40, 85, 41, 55, 19, 64, 56, 45, 88, 9, 21, 13, 33, 34, 36, 54, 38, 53, 52, 29, 50, 3, 10, 79, 78, 84, 76, 63, 77, 17, 75, 42, 16, 66, 89, 80, 15, 11, 81, 12, 18, 14, 82, 74, 4, 8, 48, 58, 44, 59, 65, 47, 87, 25, 43, 49, 70, 71, 31, 72, 32, 46, 61, 60];
+        const storeInputsDiv = document.getElementById('storeInputs');
+        const resultsDiv = document.getElementById('results');
+
+        // Generate input boxes for stores
+        for (let i = 1; i <= 89; i++) {
+            const storeDiv = document.createElement('div');
+            storeDiv.className = 'store';
+            storeDiv.innerHTML = `Store ${i}: <input type="number" id="store${i}" min="0">`;
+            if (i <= 45) {
+                storeInputsDiv.appendChild(storeDiv);
+            } else {
+                storeInputsDiv.appendChild(storeDiv).style.clear = "right";
+            }
+        }
+
+        // Disable stores not in storeOrder
+        for (let i = 1; i <= 89; i++) {
+            if (!storeOrder.includes(i)) {
+                document.getElementById(`store${i}`).disabled = true;
+            }
+        }
+
+        // Generate lanes
+        for (let i = 1; i <= 72; i++) {
+            const laneDiv = document.createElement('div');
+            laneDiv.className = 'lane';
+            laneDiv.innerHTML = `<input type="checkbox" id="lane${i}" checked onchange="toggleLaneUsable(this)"> Lane ${i}: <span id="laneAssignment${i}">Unassigned</span>`;
+            if (i <= 60) {
+                resultsDiv.appendChild(laneDiv);
+            } else {
+                resultsDiv.appendChild(laneDiv).style.clear = "right";
+            }
+        }
+
+        function toggleLaneGroup(start, end, checked) {
+            for (let i = start; i <= end; i++) {
+                const laneCheckbox = document.getElementById(`lane${i}`);
+                laneCheckbox.checked = checked;
+                toggleLaneUsable(laneCheckbox);
+            }
+        }
+
+        function processData() {
+            const storeData = [];
+
+            // Collect data from all stores
+            for (let i = 1; i <= 89; i++) {
+                const pallets = document.getElementById(`store${i}`).value || "0";
+                if (pallets !== "0") { // Only consider stores with more than 0 pallets for lane assignment
+                    storeData.push({ storeNumber: i, pallets: parseFloat(pallets), assigned: false });
+                }
+            }
+
+            // Sort stores by storeOrder
+            storeData.sort((a, b) => {
+                const indexA = storeOrder.indexOf(a.storeNumber);
+            const indexB = storeOrder.indexOf(b.storeNumber);
+                return indexA - indexB;
+            });
+
+            // Reset lane assignments
+            for (let i = 1; i <= 120; i++) {
+                document.getElementById(`laneAssignment${i}`).textContent = "Unassigned";
+            }
+
+            // Assign stores to lanes based on pallet count
+            for (let data of storeData) {
+                let laneAssigned = false;
+                for (let i = 1; i <= 120; i++) {
+                    const laneCheckbox = document.getElementById(`lane${i}`);
+                    if (laneCheckbox.checked && document.getElementById(`laneAssignment${i}`).textContent === "Unassigned") {
+                        document.getElementById(`laneAssignment${i}`).textContent = `Store ${data.storeNumber}: ${data.pallets} pallets`;
+                        laneAssigned = true;
+                        data.assigned = true;
+                        break;
+                    }
+                }
+                if (!laneAssigned && data.pallets !== 0) {
+                    // If the store wasn't assigned a lane and has pallets, it should be added to the unassigned list.
+                    // This will be handled in the exportToXLS function.
+                }
+            }
+        }
+        function exportToXLS() {
+            const currentDate = new Date().toLocaleDateString('en-US').replace(/\//g, '-');
+            let xlsContent = "data:application/vnd.ms-excel;charset=utf-8,";
+
+            const assignedStores = [];
+            const unassignedStores = [];
+
+            for (let i = 1; i <= 89; i++) {
+                const pallets = document.getElementById(`store${i}`).value || "0";
+                const laneAssignment = Array.from(document.querySelectorAll(`[id^="laneAssignment"]`)).find(el => el.textContent.includes(`Store ${i}:`));
+                if (laneAssignment) {
+                    const laneNumber = laneAssignment.parentElement.querySelector('input[type="checkbox"]').id.replace('lane', '');
+                    assignedStores.push({ store: `Store ${i}`, lane: `Lane ${laneNumber}`, pallets: pallets });
+                } else if (pallets !== "0" || !pallets) {
+                    unassignedStores.push({ store: `Store ${i}`, pallets: pallets + " pallets" });
+                }
+            }
+
+            // Sort the stores based on the storeOrder for the XLS content
+            assignedStores.sort((a, b) => {
+                const indexA = storeOrder.indexOf(parseInt(a.store.replace('Store ', '')));
+                const indexB = storeOrder.indexOf(parseInt(b.store.replace('Store ', '')));
+                return indexA - indexB;
+            });
+
+        // Start of the table
+        xlsContent += '<table>';
+        xlsContent += '<tr><th>Store</th><th>Lane</th><th>Pallets</th><th>Unassigned</th><th>Pallets</th></tr>';
+
+            storeOrder.forEach(storeNum => {
+                const assignedStore = assignedStores.find(store => store.store === `Store ${storeNum}`) || {};
+                const unassignedStore = unassignedStores.shift() || {};
+
+                // Only add a row if there's data for either an assigned or unassigned store
+                if (assignedStore.store || unassignedStore.store) {
+                    xlsContent += `<tr><td>${assignedStore.store || ""}</td><td>${assignedStore.lane || ""}</td><td>${assignedStore.pallets || ""}</td><td>${unassignedStore.store || ""}</td><td>${unassignedStore.pallets || ""}</td></tr>`;
+                }
+        });
+
+
+            // End of the table
+            xlsContent += `</table>`;
+
+            const encodedUri = encodeURI(xlsContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `lanes_assignment_${currentDate}.xls`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function toggleLaneUsable(checkbox) {
+            const laneDiv = checkbox.parentElement;
+            if (checkbox.checked) {
+                laneDiv.style.textDecoration = 'none';
+            } else {
+                laneDiv.style.textDecoration = 'line-through';
+            }
+        }
+
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Freezer Count</title>
+    
+    <style>
+        body {
+            background-image: url('background.png');
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+            background-position: -25px center;
+            padding: 20px;
+            display: flex; /* Use Flexbox */
+            justify-content: space-between; /* Space between main content and results */
+        }
+
+        .input-container {
+            flex: 1; /* Take up available space */
+            margin-right: 20px; /* Add some margin for spacing */
+        }
+
+        .store-inputs {
+            display: flex;
+            justify-content: flex-start;
+            align-items: center; /* Align items vertically */
+            margin-bottom: 5px;
+            gap: 10px;
+        }
+
+        .store-inputs label, .store-inputs input {
+            width: 80px; /* Adjust width of the labels and input fields */
+        }
+
+        .results {
+            flex: 1; /* Take up available space */
+            padding: 10px;
+            border: 1px solid #ccc;
+            height: fit-content;
+        }
+
+        form div {
+            margin-bottom: 5px;
+        }
+
+        button {
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="input-container">
+        <form id="storeForm">
+            <div>
+                <label for="freezerCount">Freezer Count:</label>
+                <input type="number" id="freezerCount">
+            </div>
+            <div>
+                <label for="pickerCount">Picker Count:</label>
+                <input type="number" id="pickerCount">
+                <button onclick="exportToCSV()">Export to CSV</button>
+                <label for="disableSBFreezer">Disable SB Freezer:</label>
+                <input type="checkbox" id="disableSBFreezer" onchange="toggleSBFreezer()" checked>
+            </div>
+
+            <div id="storeFields">
+                <!-- Store input fields will be generated here -->
+            </div>
+
+            <button type="button" onclick="generateLists()">Generate Lists</button>
+        </form>
+    </div>
+
+    <div class="results" id="results">
+        <!-- Results will be displayed here -->
+    </div>
+    <script>
+        const storeOrder = [30,20,2,6,27,51,24,73,1,37,5,22,23,35,39,7,40,85,41,55,19,64,56,45,88,9,21,13,33,34,36,54,38,53,52,29,50,3,10,79,78,84,76,63,77,17,75,42,16,66,89,80,15,11,81,12,18,14,82,74,4,8,48,58,44,59,65,47,87,25,43,49,70,71,31,72,32,46,61,60];
+
+        // Generate store input fields in normal order
+        for (let i = 1; i <= 89; i++) {
+            const div = document.createElement('div');
+            div.className = 'store-inputs';
+            div.innerHTML = `
+                <label>Store ${i}:</label>
+                <input type="number" placeholder="Freezer" id="store${i}Freezer">
+                <input type="number" placeholder="SB Freezer" id="store${i}SBFreezer" disabled>
+            `;
+
+            document.getElementById('storeFields').appendChild(div);
+        }
+
+        // Disable Freezer and SB Freezer slots for stores not in the list
+        for (let i = 1; i <= 89; i++) {
+            if (!storeOrder.includes(i)) {
+                document.getElementById(`store${i}Freezer`).disabled = true;
+                document.getElementById(`store${i}SBFreezer`).disabled = true;
+            }
+        }
+
+        function toggleSBFreezer() {
+            const disable = document.getElementById('disableSBFreezer').checked;
+            for (let i = 1; i <= 89; i++) {
+                document.getElementById(`store${i}SBFreezer`).disabled = disable;
+            }
+        }
+
+        toggleSBFreezer();
+
+        function generateLists() {
+            const freezerCount = parseInt(document.getElementById('freezerCount').value);
+            const pickerCount = parseInt(document.getElementById('pickerCount').value);
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '';
+
+            let totalFreezer = 0;
+            let currentPicker = 1;
+            let currentPickerList = [];
+
+            for (let i = 0; i < storeOrder.length; i++) {
+                const storeNumber = storeOrder[i];
+                const freezerValue = parseInt(document.getElementById(`store${storeNumber}Freezer`).value) || 0;
+                const sbFreezerValue = parseInt(document.getElementById(`store${storeNumber}SBFreezer`).value) || 0;
+
+                if (freezerValue > 0) {
+                    totalFreezer += freezerValue;
+                    currentPickerList.push(`Store ${storeNumber} (Freezer)`);
+                    if (totalFreezer >= freezerCount) {
+                        resultsDiv.innerHTML += `<p>Picker ${currentPicker}: ${currentPickerList.join(', ')}</p>`;
+                        currentPicker++;
+                        totalFreezer = 0;
+                        currentPickerList = [];
+                    }
+                }
+
+                if (sbFreezerValue > 0 && !document.getElementById('disableSBFreezer').checked) {
+                    totalFreezer += sbFreezerValue;
+                    currentPickerList.push(`Store ${storeNumber} (SB Freezer)`);
+                    if (totalFreezer >= freezerCount) {
+                        resultsDiv.innerHTML += `<p>Picker ${currentPicker}: ${currentPickerList.join(', ')}</p>`;
+                        currentPicker++;
+                        totalFreezer = 0;
+                        currentPickerList = [];
+                    }
+                }
+            }
+
+            // If there are any remaining stores for the last picker
+            if (currentPickerList.length > 0) {
+                resultsDiv.innerHTML += `<p>Picker ${currentPicker}: ${currentPickerList.join(', ')}</p>`;
+            }
+        }
+
+        function exportToCSV() {
+        const resultsDiv = document.getElementById('results');
+        const paragraphs = resultsDiv.querySelectorAll('p');
+        let csvContent = "data:text/csv;charset=utf-8,";
+
+        paragraphs.forEach(function(p) {
+            let row = p.textContent;
+            csvContent += row + "\r\n"; // Add line break for next row
+        });
+
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        const currentDate = new Date().toLocaleDateString('en-US');
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `picker_results_${currentDate}.csv`);
+        document.body.appendChild(link); // Required for Firefox
+
+        link.click(); // This will download the CSV file
+        }
+    </script>
+</body>
+</html>
+

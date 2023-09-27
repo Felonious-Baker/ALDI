@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Freezer Count</title>
+    <style>
+        body 
+        .input-container {
+            flex: 1;
+            margin-right: 20px;
+        }
+
+        .store-inputs {
+            display: flex;
+            justify-content: flex-start;
+            align-items: center;
+            margin-bottom: 5px;
+            gap: 10px;
+        }
+
+        .store-inputs label,
+        .store-inputs input {
+            width: 80px;
+        }
+
+        .results {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ccc;
+            height: fit-content;
+            margin-left: 20px;
+        }
+
+        form div {
+            margin-bottom: 5px;
+        }
+
+        button {
+            margin-top: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="input-container">
+        <form id="storeForm">
+            <div>
+                <label for="freezerCount">Freezer Count:</label>
+                <input type="number" id="freezerCount">
+            </div>
+            <div>
+                <label for="pickerCount">Picker Count:</label>
+                <input type="number" id="pickerCount">
+                <button type="button" onclick="exportToXLS()">Export to XLS</button>
+                <label for="disableSBFreezer">Disable SB Freezer:</label>
+                <input type="checkbox" id="disableSBFreezer" onchange="toggleSBFreezer()" checked>
+            </div>
+            <div id="storeFields">
+                <button type="button" onclick="generateLists()">Generate Lists</button>
+            </form>
+    </div>
+    <div class="results" id="results"></div>
+    <script>
+            const storeOrder = [30, 20, 2, 6, 27, 51, 24, 73, 1, 37, 5, 22, 23, 35, 39, 7, 40, 85, 41, 55, 19, 64, 56, 45, 88, 9, 21, 13, 33, 34, 36, 54, 38, 53, 52, 29, 50, 3, 10, 79, 78, 84, 76, 63, 77, 17, 75, 42, 16, 66, 89, 80, 15, 11, 81, 12, 18, 14, 82, 74, 4, 8, 48, 58, 44, 59, 65, 47, 87, 25, 43, 49, 70, 71, 31, 72, 32, 46, 61, 60];
+        let pickerAssignments = [];
+
+        for (let i = 1; i <= 89; i++) {
+            const div = document.createElement('div');
+            div.className = 'store-inputs';
+            div.innerHTML = `
+                <label>Store ${i}:</label>
+                <input type="number" placeholder="Freezer" id="store${i}Freezer">
+                <input type="number" placeholder="SB Freezer" id="store${i}SBFreezer" disabled>
+            `;
+            document.getElementById('storeFields').appendChild(div);
+        }
+
+        for (let i = 1; i <= 89; i++) {
+            if (!storeOrder.includes(i)) {
+                document.getElementById(`store${i}Freezer`).disabled = true;
+                document.getElementById(`store${i}SBFreezer`).disabled = true;
+            }
+        }
+
+        function toggleSBFreezer() {
+            const disable = document.getElementById('disableSBFreezer').checked;
+            for (let i = 1; i <= 89; i++) {
+                document.getElementById(`store${i}SBFreezer`).disabled = disable;
+            }
+        }
+
+        toggleSBFreezer();
+
+        function generateLists() {
+            const freezerCount = parseInt(document.getElementById('freezerCount').value);
+            let totalFreezer = 0;
+            let currentPicker = 1;
+            let currentPickerList = [];
+            pickerAssignments = [];
+
+            for (let i = 0; i < storeOrder.length; i++) {
+                const storeNumber = storeOrder[i];
+                const freezerValue = parseInt(document.getElementById(`store${storeNumber}Freezer`).value) || 0;
+                const sbFreezerValue = parseInt(document.getElementById(`store${storeNumber}SBFreezer`).value) || 0;
+
+                if (freezerValue > 0) {
+                    totalFreezer += freezerValue;
+                    currentPickerList.push({ store: storeNumber, type: 'Freezer', value: freezerValue });
+                    if (totalFreezer >= freezerCount) {
+                        pickerAssignments.push({ picker: currentPicker, assignments: currentPickerList });
+                        currentPicker++;
+                        totalFreezer = 0;
+                        currentPickerList = [];
+                    }
+                }
+
+                if (sbFreezerValue > 0 && !document.getElementById('disableSBFreezer').checked) {
+                    totalFreezer += sbFreezerValue;
+                    currentPickerList.push({ store: storeNumber, type: 'SB Freezer', value: sbFreezerValue });
+                    if (totalFreezer >= freezerCount) {
+                        pickerAssignments.push({ picker: currentPicker, assignments: currentPickerList });
+                        currentPicker++;
+                        totalFreezer = 0;
+                        currentPickerList = [];
+                    }
+                }
+            }
+
+            if (currentPickerList.length > 0) {
+                pickerAssignments.push({ picker: currentPicker, assignments: currentPickerList });
+            }
+
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '';
+            for (const assignment of pickerAssignments) {
+                const stores = assignment.assignments.map(a => `Store ${a.store} (${a.type})`).join(', ');
+                resultsDiv.innerHTML += `<p>Picker ${assignment.picker}: ${stores}</p>`;
+            }
+        }
+
+        function exportToXLS() {
+            const currentDate = new Date();
+            const formattedDate = `${currentDate.getDate().toString().padStart(2, '0')}-${(currentDate.getMonth() + 1).toString().padStart(2, '0')}-${currentDate.getFullYear()}`;
+
+            let xlsContent = '<table border="1">';
+            xlsContent += `<tr><td>Picker Assignment</td><td>Store</td><td>Order Size</td></tr>`;
+
+            for (const assignment of pickerAssignments) {
+                let isFirstRowForPicker = true;
+                for (const storeAssignment of assignment.assignments) {
+                    const freezerValue = storeAssignment.type === 'Freezer' ? storeAssignment.value : '';
+                    const sbFreezerValue = storeAssignment.type === 'SB Freezer' ? storeAssignment.value : '';
+                    const pickerAssignmentStr = isFirstRowForPicker ? `Picker ${assignment.picker}` : '';
+                    xlsContent += `<tr><td>${pickerAssignmentStr}</td><td>Store ${storeAssignment.store} (${storeAssignment.type})</td><td>${freezerValue}${sbFreezerValue}</td></tr>`;
+                    isFirstRowForPicker = false;
+                }
+            }
+
+            xlsContent += '</table>';
+
+            const blob = new Blob([xlsContent], { type: 'application/vnd.ms-excel' });
+            const url = window.URL.createObjectURL(blob);
+
+            const link = document.createElement("a");
+            link.setAttribute("href", url);
+            link.setAttribute("download", `store_data_${formattedDate}.xls`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    </script>
+</body>
+
+</html>
